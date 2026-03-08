@@ -1,0 +1,7 @@
+[project]
+name = "mnemotion"
+version = "0.1.0"
+description = "Memory-Persistent Long-Form Video Synthesis."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
