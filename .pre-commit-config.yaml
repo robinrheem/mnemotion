@@ -1,0 +1,72 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+default_install_hook_types:
+  - pre-commit
+  - commit-msg
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: pretty-format-json
+        args: [--autofix, --no-ensure-ascii, --no-sort-keys]
+      - id: check-added-large-files
+      - id: check-docstring-first
+      - id: debug-statements
+      - id: name-tests-test
+        args: [--pytest-test-first]
+      - id: check-ast
+      - id: check-case-conflict
+  - repo: https://github.com/psf/black
+    rev: 26.3.0
+    hooks:
+      - id: black
+        args:
+          - --line-length=88
+  - repo: https://github.com/pycqa/isort
+    rev: 8.0.1
+    hooks:
+      - id: isort
+        args: ["--profile", "black", "--filter-files"]
+        name: "isort (python)"
+        types: [python]
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: v0.15.5
+    hooks:
+      - id: ruff
+        args:
+          - --fix
+          - --target-version=py311
+          - -n
+          - -v
+  - repo: https://github.com/pre-commit/pre-commit
+    rev: v4.5.1
+    hooks:
+      - id: validate_manifest
+  - repo: https://github.com/econchick/interrogate
+    rev: 1.7.0
+    hooks:
+      - id: interrogate
+        args: [-vv, -i, --fail-under=50, --ignore-init-module]
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args:
+          [
+            --verbose,
+            --strict,
+            refactor,
+            build,
+            fix,
+            feat,
+            chore,
+            perf,
+            test,
+            doc,
+          ]
