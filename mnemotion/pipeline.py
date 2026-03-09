@@ -1,10 +1,8 @@
 """Video generation pipeline using image-to-video chaining."""
 
-import subprocess
-import tempfile
 from pathlib import Path
 
-import imageio.v3 as iio
+import imageio
 import numpy as np
 import torch
 from diffusers import AutoPipelineForText2Image, WanImageToVideoPipeline
@@ -117,10 +115,17 @@ class VideoPipeline:
         return frame.astype(np.uint8)
 
     def run(self) -> Path:
-        """Run the full pipeline: generate all scenes and concatenate."""
-        clips: list[Path] = []
+        """Run the full pipeline: generate all scenes and stream to video."""
         anchor: Image.Image | None = None
-        with tempfile.TemporaryDirectory() as tmpdir:
+        frame_count = 0
+        # Stream frames directly to disk (low memory)
+        writer = imageio.get_writer(
+            self.config.output,
+            fps=self.config.fps,
+            codec="libx264",
+            quality=8,
+        )
+        try:
             for i, scene in enumerate(self.config.scenes):
                 print(
                     f"[{i + 1}/{len(self.config.scenes)}] Generating: {scene.prompt[:50]}..."
@@ -138,41 +143,13 @@ class VideoPipeline:
                             f"Using first frame as IP-Adapter reference, scale={self.config.ip_adapter_scale}"
                         )
                 frames = self.generate_clip(anchor, scene)
-                # Convert frames to uint8 for video encoding
-                frames_uint8 = [self._to_uint8(f) for f in frames]
-                # Last frame becomes next anchor (convert back to PIL)
-                anchor = Image.fromarray(frames_uint8[-1])
-                clip_path = Path(tmpdir) / f"clip_{i:03d}.mp4"
-                iio.imwrite(
-                    clip_path,
-                    frames_uint8,
-                    fps=self.config.fps,
-                    codec="libx264",
-                )
-                clips.append(clip_path)
-            self._concat_clips(clips, self.config.output)
+                for frame in frames:
+                    frame_uint8 = self._to_uint8(frame)
+                    writer.append_data(frame_uint8)
+                    frame_count += 1
+                # Last frame becomes next anchor
+                anchor = Image.fromarray(self._to_uint8(frames[-1]))
+        finally:
+            writer.close()
+        print(f"Wrote {frame_count} frames to {self.config.output}")
         return self.config.output
-
-    def _concat_clips(self, clips: list[Path], output: Path) -> None:
-        """Concatenate video clips using ffmpeg."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-            for clip in clips:
-                f.write(f"file '{clip}'\n")
-            concat_file = f.name
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-f",
-                "concat",
-                "-safe",
-                "0",
-                "-i",
-                concat_file,
-                "-c",
-                "copy",
-                str(output),
-            ],
-            check=True,
-            capture_output=True,
-        )
