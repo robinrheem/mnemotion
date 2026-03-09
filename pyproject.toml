@@ -13,6 +13,7 @@ dependencies = [
     "pydantic>=2.10.0",
     "pyyaml>=6.0",
     "imageio[ffmpeg]>=2.36.0",
+    "ftfy>=6.1.0",
 ]
 
 [project.scripts]
