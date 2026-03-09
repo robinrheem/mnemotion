@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 import imageio.v3 as iio
+import numpy as np
 import torch
 from diffusers import AutoPipelineForText2Image, WanImageToVideoPipeline
 from PIL import Image
@@ -71,34 +72,39 @@ class VideoPipeline:
         )
         return result.frames[0]
 
+    def _to_uint8(self, frame: np.ndarray | Image.Image) -> np.ndarray:
+        """Convert a frame to uint8 numpy array."""
+        if isinstance(frame, Image.Image):
+            return np.array(frame, dtype=np.uint8)
+        if frame.dtype == np.float32 or frame.dtype == np.float64:
+            return (frame * 255).clip(0, 255).astype(np.uint8)
+        return frame.astype(np.uint8)
+
     def run(self) -> Path:
         """Run the full pipeline: generate all scenes and concatenate."""
         clips: list[Path] = []
         anchor: Image.Image | None = None
-
         with tempfile.TemporaryDirectory() as tmpdir:
             for i, scene in enumerate(self.config.scenes):
                 print(
                     f"[{i + 1}/{len(self.config.scenes)}] Generating: {scene.prompt[:50]}..."
                 )
-
                 if anchor is None:
                     anchor = self.generate_anchor(scene)
-
                 frames = self.generate_clip(anchor, scene)
-                anchor = frames[-1]  # last frame becomes next anchor
-
+                # Convert frames to uint8 for video encoding
+                frames_uint8 = [self._to_uint8(f) for f in frames]
+                # Last frame becomes next anchor (convert back to PIL)
+                anchor = Image.fromarray(frames_uint8[-1])
                 clip_path = Path(tmpdir) / f"clip_{i:03d}.mp4"
                 iio.imwrite(
                     clip_path,
-                    [frame for frame in frames],
+                    frames_uint8,
                     fps=self.config.fps,
                     codec="libx264",
                 )
                 clips.append(clip_path)
-
             self._concat_clips(clips, self.config.output)
-
         return self.config.output
 
     def _concat_clips(self, clips: list[Path], output: Path) -> None:
