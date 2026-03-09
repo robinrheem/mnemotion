@@ -15,3 +15,11 @@ width: 1280
 height: 720
 image_model: black-forest-labs/FLUX.1-schnell
 video_model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
+
+# IP-Adapter for character consistency (optional)
+# Requires SDXL - change image_model to: stabilityai/stable-diffusion-xl-base-1.0
+# Option 1: Provide your own reference image
+# reference_image: wizard_reference.png
+# Option 2: Auto-use first generated frame as reference (no external image needed)
+use_first_frame_as_reference: true
+ip_adapter_scale: 0.6  # 0.0 = text only, 1.0 = image only

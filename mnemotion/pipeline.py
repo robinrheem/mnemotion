@@ -21,19 +21,45 @@ class VideoPipeline:
         self.config = config
         self.device = device
         self.is_flux = "flux" in config.image_model.lower()
-
+        self.reference_image: Image.Image | None = None
+        self.ip_adapter_loaded = False
+        # Validate IP-Adapter compatibility
+        if (
+            config.reference_image or config.use_first_frame_as_reference
+        ) and self.is_flux:
+            raise ValueError(
+                "IP-Adapter requires SDXL. Set image_model to "
+                "'stabilityai/stable-diffusion-xl-base-1.0' when using reference_image."
+            )
         # Flux uses bfloat16, others use float16
         img_dtype = torch.bfloat16 if self.is_flux else torch.float16
-
         self.image_pipe = AutoPipelineForText2Image.from_pretrained(
             config.image_model,
             torch_dtype=img_dtype,
         ).to(device)
-
+        # Load IP-Adapter for character consistency (if reference provided upfront)
+        if config.reference_image:
+            self._load_ip_adapter()
+            self.reference_image = Image.open(config.reference_image).convert("RGB")
+            print(
+                f"Loaded IP-Adapter with reference image, scale={config.ip_adapter_scale}"
+            )
         self.video_pipe = WanImageToVideoPipeline.from_pretrained(
             config.video_model,
             torch_dtype=torch.float16,
         ).to(device)
+
+    def _load_ip_adapter(self) -> None:
+        """Load IP-Adapter weights into the image pipeline."""
+        if self.ip_adapter_loaded:
+            return
+        self.image_pipe.load_ip_adapter(
+            "h94/IP-Adapter",
+            subfolder="sdxl_models",
+            weight_name="ip-adapter_sdxl.bin",
+        )
+        self.image_pipe.set_ip_adapter_scale(self.config.ip_adapter_scale)
+        self.ip_adapter_loaded = True
 
     def generate_anchor(self, scene: Scene) -> Image.Image:
         """Generate or load the anchor image for a scene."""
@@ -53,7 +79,9 @@ class VideoPipeline:
         # Flux doesn't support negative_prompt
         if not self.is_flux:
             kwargs["negative_prompt"] = scene.negative_prompt
-
+        # IP-Adapter for character consistency
+        if self.reference_image is not None:
+            kwargs["ip_adapter_image"] = self.reference_image
         return self.image_pipe(**kwargs).images[0]
 
     def generate_clip(self, anchor: Image.Image, scene: Scene) -> list[Image.Image]:
@@ -91,6 +119,16 @@ class VideoPipeline:
                 )
                 if anchor is None:
                     anchor = self.generate_anchor(scene)
+                    # Use first frame as IP-Adapter reference for subsequent scenes
+                    if (
+                        self.config.use_first_frame_as_reference
+                        and not self.ip_adapter_loaded
+                    ):
+                        self._load_ip_adapter()
+                        self.reference_image = anchor
+                        print(
+                            f"Using first frame as IP-Adapter reference, scale={self.config.ip_adapter_scale}"
+                        )
                 frames = self.generate_clip(anchor, scene)
                 # Convert frames to uint8 for video encoding
                 frames_uint8 = [self._to_uint8(f) for f in frames]
@@ -113,7 +151,6 @@ class VideoPipeline:
             for clip in clips:
                 f.write(f"file '{clip}'\n")
             concat_file = f.name
-
         subprocess.run(
             [
                 "ffmpeg",

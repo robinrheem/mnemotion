@@ -26,6 +26,10 @@ class Config(BaseModel):
     height: int = 720
     image_model: str = "black-forest-labs/FLUX.1-dev"
     video_model: str = "Wan-AI/Wan2.1-I2V-14B-720P-Diffusers"
+    # IP-Adapter for character consistency (requires SDXL as image_model)
+    reference_image: Path | None = None
+    ip_adapter_scale: float = 0.6
+    use_first_frame_as_reference: bool = False  # auto-use first generated frame
 
     @classmethod
     def from_yaml(cls, path: Path) -> "Config":
