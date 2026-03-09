@@ -48,6 +48,13 @@ class VideoPipeline:
             config.video_model,
             torch_dtype=torch.float16,
         ).to(device)
+        self.video_pipe.vae.enable_slicing()
+        self.video_pipe.transformer = torch.compile(
+            self.video_pipe.transformer,
+            mode="reduce-overhead",
+            fullgraph=True,
+        )
+        print("Compiled video transformer (first run will be slow)")
 
     def _load_ip_adapter(self) -> None:
         """Load IP-Adapter weights into the image pipeline."""
@@ -84,6 +91,7 @@ class VideoPipeline:
             kwargs["ip_adapter_image"] = self.reference_image
         return self.image_pipe(**kwargs).images[0]
 
+    @torch.inference_mode()
     def generate_clip(self, anchor: Image.Image, scene: Scene) -> list[Image.Image]:
         """Generate a video clip from an anchor image using I2V."""
         num_frames = int(scene.duration * self.config.fps)
