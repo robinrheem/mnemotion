@@ -6,7 +6,17 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "typer>=0.24.1",
+    "diffusers>=0.32.0",
+    "transformers>=4.47.0",
+    "accelerate>=1.2.0",
+    "torch>=2.4.0",
+    "pydantic>=2.10.0",
+    "pyyaml>=6.0",
+    "imageio[ffmpeg]>=2.36.0",
 ]
+
+[project.scripts]
+mnemotion = "mnemotion.main:app"
 
 [dependency-groups]
 dev = [
