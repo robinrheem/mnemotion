@@ -1,0 +1,17 @@
+scenes:
+  - prompt: A wizard standing in a dark enchanted forest, moonlight filtering through twisted branches
+    duration: 4
+    seed: 42
+
+  - prompt: The wizard raises his wooden staff, blue magical energy begins swirling around it
+    duration: 4
+
+  - prompt: Lightning erupts from the staff, illuminating the entire forest in brilliant blue light
+    duration: 3
+
+output: wizard_scene.mp4
+fps: 24
+width: 1280
+height: 720
+image_model: black-forest-labs/FLUX.1-schnell
+video_model: Wan-AI/Wan2.1-I2V-14B-720P-Diffusers
