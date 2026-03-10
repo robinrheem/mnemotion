@@ -117,8 +117,9 @@ class VideoPipeline:
         generator: torch.Generator | None,
     ) -> Image.Image:
         """Generate anchor using Kontext for character consistency."""
-        # Unload T2I model to free memory before loading Kontext
+        # Unload other models to free memory before loading Kontext
         self._unload_image_pipe()
+        self._unload_framepack_pipe()
         self._load_kontext_pipe()
 
         # Resize reference to target dimensions
@@ -134,6 +135,14 @@ class VideoPipeline:
             generator=generator,
         )
         return result.images[0]
+
+    def _unload_framepack_pipe(self) -> None:
+        """Unload FramePack pipeline to free GPU memory."""
+        if self.framepack_pipe is not None:
+            del self.framepack_pipe
+            self.framepack_pipe = None
+            torch.cuda.empty_cache()
+            print("Unloaded FramePack model")
 
     def _load_framepack_pipe(self) -> None:
         """Load HunyuanVideo + FramePack pipeline to GPU."""
@@ -174,6 +183,9 @@ class VideoPipeline:
         last_image: Image.Image | None = None,
     ) -> list[Image.Image]:
         """Generate a video clip using HunyuanVideo + FramePack."""
+        # Unload image models to free memory for FramePack
+        self._unload_image_pipe()
+        self._unload_kontext_pipe()
         self._load_framepack_pipe()
         num_frames = int(scene.duration * self.config.fps)
         num_frames = max(17, num_frames)  # minimum 17 frames for FramePack
@@ -248,10 +260,10 @@ class VideoPipeline:
                     writer.append_data(self._to_uint8(frame))
                     frame_count += 1
                 prev_last_frame = Image.fromarray(self._to_uint8(frames[-1]))
-            # Unload image pipes at end
-            if self.config.fresh_anchors:
-                self._unload_image_pipe()
-                self._unload_kontext_pipe()
+            # Unload all pipes at end
+            self._unload_image_pipe()
+            self._unload_kontext_pipe()
+            self._unload_framepack_pipe()
         finally:
             writer.close()
         print(f"Wrote {frame_count} frames to {self.config.output}")
