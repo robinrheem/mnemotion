@@ -7,6 +7,7 @@ import numpy as np
 import torch
 from diffusers import (
     AutoPipelineForText2Image,
+    FluxKontextPipeline,
     HunyuanVideoFramepackPipeline,
     HunyuanVideoFramepackTransformer3DModel,
 )
@@ -26,6 +27,7 @@ class VideoPipeline:
         self.is_flux = "flux" in config.image_model.lower()
         # Pipeline instances (lazy loaded)
         self.image_pipe = None
+        self.kontext_pipe = None
         self.framepack_pipe = None
 
     def _load_image_pipe(self) -> None:
@@ -50,26 +52,88 @@ class VideoPipeline:
             torch.cuda.empty_cache()
             print("Unloaded image model")
 
-    def generate_anchor(self, scene: Scene) -> Image.Image:
-        """Generate or load the anchor image for a scene."""
+    def _load_kontext_pipe(self) -> None:
+        """Load FLUX Kontext pipeline for character-consistent generation."""
+        if self.kontext_pipe is not None:
+            return
+        print("Loading FLUX Kontext model...")
+        self.kontext_pipe = FluxKontextPipeline.from_pretrained(
+            "black-forest-labs/FLUX.1-Kontext-dev",
+            torch_dtype=torch.bfloat16,
+        ).to(self.device)
+        print("Loaded FLUX Kontext")
+
+    def _unload_kontext_pipe(self) -> None:
+        """Unload Kontext pipeline to free GPU memory."""
+        if self.kontext_pipe is not None:
+            del self.kontext_pipe
+            self.kontext_pipe = None
+            torch.cuda.empty_cache()
+            print("Unloaded Kontext model")
+
+    def generate_anchor(
+        self, scene: Scene, reference: Image.Image | None = None
+    ) -> Image.Image:
+        """Generate or load the anchor image for a scene.
+
+        Args:
+            scene: Scene configuration with prompts
+            reference: Optional reference image for character consistency (Kontext)
+        """
         if scene.anchor_image:
             return Image.open(scene.anchor_image).convert("RGB")
-        self._load_image_pipe()
-        # Use anchor_prompt for visual details, fall back to motion prompt
+
         prompt = scene.anchor_prompt or scene.prompt
+        generator = (
+            torch.Generator(self.device).manual_seed(scene.seed) if scene.seed else None
+        )
+
+        if reference is not None and self.config.use_kontext:
+            # Use Kontext for character-consistent generation
+            return self._generate_anchor_kontext(prompt, reference, generator)
+        else:
+            # Use standard text-to-image
+            return self._generate_anchor_t2i(scene, prompt, generator)
+
+    def _generate_anchor_t2i(
+        self, scene: Scene, prompt: str, generator: torch.Generator | None
+    ) -> Image.Image:
+        """Generate anchor using text-to-image (FLUX.1-dev)."""
+        self._load_image_pipe()
         kwargs = {
             "prompt": prompt,
             "width": self.config.width,
             "height": self.config.height,
-            "generator": (
-                torch.Generator(self.device).manual_seed(scene.seed)
-                if scene.seed
-                else None
-            ),
+            "generator": generator,
         }
         if not self.is_flux:
             kwargs["negative_prompt"] = scene.negative_prompt
         return self.image_pipe(**kwargs).images[0]
+
+    def _generate_anchor_kontext(
+        self,
+        prompt: str,
+        reference: Image.Image,
+        generator: torch.Generator | None,
+    ) -> Image.Image:
+        """Generate anchor using Kontext for character consistency."""
+        # Unload T2I model to free memory before loading Kontext
+        self._unload_image_pipe()
+        self._load_kontext_pipe()
+
+        # Resize reference to target dimensions
+        reference = reference.resize((self.config.width, self.config.height))
+
+        result = self.kontext_pipe(
+            image=reference,
+            prompt=prompt,
+            width=self.config.width,
+            height=self.config.height,
+            guidance_scale=2.5,
+            num_inference_steps=28,
+            generator=generator,
+        )
+        return result.images[0]
 
     def _load_framepack_pipe(self) -> None:
         """Load HunyuanVideo + FramePack pipeline to GPU."""
@@ -151,6 +215,7 @@ class VideoPipeline:
         """Run the full FramePack pipeline."""
         frame_count = 0
         prev_last_frame = None
+        prev_anchor = None  # For Kontext chaining
         writer = imageio.get_writer(
             self.config.output,
             fps=self.config.fps,
@@ -164,12 +229,15 @@ class VideoPipeline:
                 if scene.anchor_image:
                     anchor = Image.open(scene.anchor_image).convert("RGB")
                 elif self.config.fresh_anchors or i == 0:
-                    # Generate fresh anchor for this scene
-                    anchor = self.generate_anchor(scene)
+                    # Generate anchor for this scene
+                    # First scene: no reference (text-to-image)
+                    # Subsequent scenes: use previous anchor as reference (Kontext)
+                    anchor = self.generate_anchor(scene, reference=prev_anchor)
+                    prev_anchor = anchor  # Chain for next scene
                     if not self.config.fresh_anchors:
                         self._unload_image_pipe()  # Free memory if only used for first scene
                 else:
-                    # Chain from previous scene's last frame
+                    # Chain from previous scene's last frame (no Kontext)
                     anchor = prev_last_frame
                 # Load last_image if provided
                 last_image = None
@@ -180,9 +248,10 @@ class VideoPipeline:
                     writer.append_data(self._to_uint8(frame))
                     frame_count += 1
                 prev_last_frame = Image.fromarray(self._to_uint8(frames[-1]))
-            # Unload image pipe at end if we used fresh_anchors
+            # Unload image pipes at end
             if self.config.fresh_anchors:
                 self._unload_image_pipe()
+                self._unload_kontext_pipe()
         finally:
             writer.close()
         print(f"Wrote {frame_count} frames to {self.config.output}")

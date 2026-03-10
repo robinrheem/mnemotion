@@ -1,128 +1,134 @@
 # Subject Consistency Benchmark - anchored - 90s exploration
 # Uses split prompts: anchor_prompt (visual details) + prompt (motion)
+#
+# CLIP+T5 Optimization Strategy:
+# - Scene 1: Full character description (T2I) - front-load identity tokens for CLIP
+# - Scenes 2+: Kontext instructions - focus on scene/pose, character preserved from reference
 
 scenes:
   # === PHASE: establish (10s, 2 chunks) ===
-  - anchor_prompt: "Wide shot of a simple cartoon living room with a big purple couch, a round wooden coffee table, a tall bookshelf with colorful books, a round yellow rug on the floor, and a window with green curtains. A cartoon girl with big round green eyes, bright orange pigtails, a yellow t-shirt with a star on the chest, blue shorts, and red sneakers sits on the left side of the purple couch. A cartoon robot with a boxy silver body, round blue glowing eyes, short stubby arms, antenna on top of its head, and small wheels for feet sits on the right side of the couch. The round wooden coffee table is between them. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  # Scene 1: Full T2I prompt - front-load character tokens for CLIP's 77 token limit
+  - anchor_prompt: "cartoon girl, green eyes, orange pigtails, yellow star t-shirt, blue shorts, red sneakers, cartoon robot, silver boxy body, blue glowing eyes, antenna, wheels, 3D Pixar style, bright colors, soft lighting. Wide shot of living room with purple couch, wooden coffee table, bookshelf, yellow rug, green curtains. Girl sits on left side of couch, robot sits on right side."
     prompt: "The girl talks excitedly, waving her hands around, her orange pigtails bouncing. The robot's blue eyes blink as it listens, antenna wiggling slightly."
     duration: 5.0
     seed: 42
 
-  - anchor_prompt: "Medium shot of a simple cartoon living room. A cartoon robot with boxy silver body, round blue glowing eyes, stubby arms, and antenna sits on the right side of a big purple couch. A cartoon girl with big round green eyes, bright orange pigtails, yellow star t-shirt, blue shorts, and red sneakers sits on the left. Bookshelf with colorful books in background, green curtains frame the window. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  # Scenes 2+: Kontext prompts - character comes from reference, focus on scene changes
+  - anchor_prompt: "Change to medium shot. The robot sits on right side of purple couch, the girl sits on left. Bookshelf with colorful books in background, green curtains frame window. Keep same characters, same art style."
     prompt: "The robot waves its stubby arms while beeping happily, wheels rocking side to side. The girl leans in and laughs, her pigtails swinging."
     duration: 5.0
     seed: 42
 
   # === PHASE: departure (5s, 1 chunk) ===
-  - anchor_prompt: "Wide shot of a simple cartoon living room with purple couch, round wooden coffee table, tall bookshelf, round yellow rug, and window with green curtains. A cartoon girl with big round green eyes, bright orange pigtails, yellow star t-shirt, blue shorts, and red sneakers stands near the couch. A cartoon robot with boxy silver body, round blue glowing eyes, stubby arms, antenna, and small wheels sits on the couch. Doorway visible on right side of room. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  - anchor_prompt: "Wide shot. The girl stands near the purple couch. The robot sits on the couch. Add doorway on right side of room. Same living room with purple couch, coffee table, bookshelf, yellow rug, green curtains. Same characters, same style."
     prompt: "The girl hops off the couch and waves goodbye to the robot. She skips toward the doorway, her orange pigtails bouncing with each step. The robot waves one stubby arm from the couch."
     duration: 5.0
     seed: 42
 
   # === PHASE: explore (18 chunks, 90s) ===
-  - anchor_prompt: "Wide shot of a simple cartoon bedroom with a red bed with white pillow, blue nightstand with star-shaped lamp, window with yellow curtains, green toy chest in the corner, and small cactus plant on the windowsill. A cartoon girl with big round green eyes, bright orange pigtails, yellow star t-shirt, blue shorts, and red sneakers stands by the bed. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  - anchor_prompt: "New scene: cartoon bedroom. Wide shot. Red bed with white pillow, blue nightstand with star lamp, window with yellow curtains, green toy chest, small cactus on windowsill. The girl stands by the bed. Same girl character, same Pixar 3D style."
     prompt: "The girl bounces enthusiastically on the red bed, her pigtails flying up and down with each bounce."
     duration: 5.0
     seed: 42
 
-  - anchor_prompt: "Close-up shot in a simple cartoon bedroom. A cartoon girl with big round green eyes, bright orange pigtails, yellow star t-shirt, blue shorts, and red sneakers sits on the edge of the red bed. Blue nightstand with star-shaped lamp visible. Window with yellow curtains, green toy chest, and small cactus on windowsill in background. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  - anchor_prompt: "Close-up shot. The girl sits on edge of red bed. Blue nightstand with star lamp visible. Window with yellow curtains, green toy chest in background. Same bedroom, same girl, same style."
     prompt: "The girl swings her red sneakers back and forth playfully, her face showing curiosity as she looks around the room."
     duration: 5.0
     seed: 42
 
-  - anchor_prompt: "Medium shot of a simple cartoon bedroom. A cartoon girl with big round green eyes, bright orange pigtails, yellow star t-shirt, blue shorts, and red sneakers kneels by the green toy chest. Red bed with white pillow, blue nightstand with star-shaped lamp, window with yellow curtains, and small cactus on windowsill visible. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  - anchor_prompt: "Medium shot. The girl kneels by the green toy chest. Red bed, blue nightstand with star lamp, window with yellow curtains visible. Same bedroom, same girl, same style."
     prompt: "The girl opens the green toy chest and peeks inside with wide-eyed curiosity, leaning forward excitedly."
     duration: 5.0
     seed: 42
 
-  - anchor_prompt: "Over-the-shoulder shot of a simple cartoon bedroom. A cartoon girl with big round green eyes, bright orange pigtails, yellow star t-shirt, blue shorts, and red sneakers stands at the window with yellow curtains. Red bed with white pillow, blue nightstand with star-shaped lamp, green toy chest, and small cactus on windowsill visible. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  - anchor_prompt: "Over-the-shoulder shot. The girl stands at window with yellow curtains. Red bed, blue nightstand, green toy chest visible behind her. Same bedroom, same girl, same style."
     prompt: "The girl pulls the yellow curtains apart with both hands to look outside with wonder."
     duration: 5.0
     seed: 42
 
-  - anchor_prompt: "Close-up shot in a simple cartoon bedroom focusing on the windowsill. A cartoon girl with big round green eyes, bright orange pigtails, yellow star t-shirt, blue shorts, and red sneakers stands near the small cactus plant. Red bed with white pillow, blue nightstand with star-shaped lamp, window with yellow curtains, and green toy chest visible. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  - anchor_prompt: "Close-up shot focusing on windowsill. The girl stands near small cactus plant. Red bed, blue nightstand, yellow curtains, green toy chest visible. Same bedroom, same girl, same style."
     prompt: "The girl carefully pokes the small cactus plant on the windowsill with one finger, her face showing cautious curiosity."
     duration: 5.0
     seed: 42
 
-  - anchor_prompt: "Low angle shot in a simple cartoon bedroom. A cartoon girl with big round green eyes, bright orange pigtails, yellow star t-shirt, blue shorts, and red sneakers stands by the blue nightstand with star-shaped lamp. Red bed with white pillow, window with yellow curtains, green toy chest, and small cactus on windowsill visible. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  - anchor_prompt: "Low angle shot. The girl stands by blue nightstand with star lamp. Red bed, window with yellow curtains, green toy chest visible. Same bedroom, same girl, same style."
     prompt: "The girl reaches up to turn on the star-shaped lamp on the blue nightstand, stretching on her tiptoes with determination."
     duration: 5.0
     seed: 42
 
-  - anchor_prompt: "High angle shot looking down at a simple cartoon bedroom. A cartoon girl with big round green eyes, bright orange pigtails, yellow star t-shirt, blue shorts, and red sneakers lies on the red bed with white pillow. Blue nightstand with star-shaped lamp, window with yellow curtains, green toy chest, and small cactus on windowsill visible. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  - anchor_prompt: "High angle shot looking down. The girl lies on red bed with white pillow, arms spread wide. Blue nightstand, yellow curtains, green toy chest visible. Same bedroom, same girl, same style."
     prompt: "The girl lies on the red bed looking up at the ceiling with arms spread wide and a big smile."
     duration: 5.0
     seed: 42
 
-  - anchor_prompt: "Medium shot of a simple cartoon bedroom. A cartoon girl with big round green eyes, bright orange pigtails, yellow star t-shirt, blue shorts, and red sneakers kneels on the floor next to the red bed. Blue nightstand with star-shaped lamp, window with yellow curtains, green toy chest, and small cactus on windowsill visible. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  - anchor_prompt: "Medium shot. The girl kneels on floor next to red bed, looking underneath. Blue nightstand, yellow curtains, green toy chest visible. Same bedroom, same girl, same style."
     prompt: "The girl kneels on the floor and looks under the red bed with curious excitement, her head tilted to peer into the shadows."
     duration: 5.0
     seed: 42
 
-  - anchor_prompt: "Wide shot of a simple cartoon bedroom. A cartoon girl with big round green eyes, bright orange pigtails, yellow star t-shirt, blue shorts, and red sneakers stands in the center of the room. Red bed with white pillow, blue nightstand with star-shaped lamp, window with yellow curtains, green toy chest, and small cactus on windowsill visible. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  - anchor_prompt: "Wide shot. The girl stands in center of bedroom with arms outstretched. Red bed, blue nightstand, yellow curtains, green toy chest, cactus visible. Same bedroom, same girl, same style."
     prompt: "The girl spins around joyfully in the center of the room with her arms stretched out wide, her pigtails swirling around her."
     duration: 5.0
     seed: 42
 
-  - anchor_prompt: "Medium shot of a simple cartoon bedroom. A cartoon girl with big round green eyes, bright orange pigtails, yellow star t-shirt, blue shorts, and red sneakers sits cross-legged on top of the green toy chest. Red bed with white pillow, blue nightstand with star-shaped lamp, window with yellow curtains, and small cactus on windowsill visible. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  - anchor_prompt: "Medium shot. The girl sits cross-legged on top of green toy chest. Red bed, blue nightstand, yellow curtains visible. Same bedroom, same girl, same style."
     prompt: "The girl sits on the green toy chest, looking around the room with wonder and swinging her red sneakers."
     duration: 5.0
     seed: 42
 
-  - anchor_prompt: "Close-up shot in a simple cartoon bedroom. A cartoon girl with big round green eyes, bright orange pigtails, yellow star t-shirt, blue shorts, and red sneakers stands by the blue nightstand. Star-shaped lamp on the nightstand. Red bed with white pillow, window with yellow curtains, green toy chest, and small cactus on windowsill visible. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  - anchor_prompt: "Close-up shot. The girl stands by blue nightstand, touching it with both hands. Star lamp on nightstand. Red bed, yellow curtains, green toy chest visible. Same bedroom, same girl, same style."
     prompt: "The girl touches and examines the blue nightstand closely with her hands, running her fingers along its surface with fascination."
     duration: 5.0
     seed: 42
 
-  - anchor_prompt: "Wide shot of a simple cartoon bedroom. A cartoon girl with big round green eyes, bright orange pigtails, yellow star t-shirt, blue shorts, and red sneakers stands in the middle of the room. Red bed with white pillow, blue nightstand with star-shaped lamp, window with yellow curtains, green toy chest, and small cactus on windowsill visible. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  - anchor_prompt: "Wide shot. The girl walks through center of bedroom. Red bed, blue nightstand, yellow curtains, green toy chest, cactus visible. Same bedroom, same girl, same style."
     prompt: "The girl walks around the room with wide-eyed amazement, looking at everything with curiosity and wonder."
     duration: 5.0
     seed: 42
 
-  - anchor_prompt: "Medium shot of a simple cartoon bedroom. A cartoon girl with big round green eyes, bright orange pigtails, yellow star t-shirt, blue shorts, and red sneakers stands in the middle of the bedroom. Red bed with white pillow, blue nightstand with star-shaped lamp, window with yellow curtains, green toy chest, and small cactus on windowsill visible. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  - anchor_prompt: "Medium shot. The girl dances in middle of bedroom, arms moving. Red bed, blue nightstand, yellow curtains, green toy chest visible. Same bedroom, same girl, same style."
     prompt: "The girl does a silly dance in the middle of the bedroom, moving her arms and swaying her hips with pure joy."
     duration: 5.0
     seed: 42
 
-  - anchor_prompt: "Low angle shot of a simple cartoon bedroom. A cartoon girl with big round green eyes, bright orange pigtails, yellow star t-shirt, blue shorts, and red sneakers stands near the window with yellow curtains. Red bed with white pillow, blue nightstand with star-shaped lamp, green toy chest, and small cactus on windowsill visible. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  - anchor_prompt: "Low angle shot. The girl stands near window with yellow curtains, on tiptoes reaching up. Red bed, blue nightstand, green toy chest visible. Same bedroom, same girl, same style."
     prompt: "The girl stands on tiptoes trying to reach the top of the window frame, stretching up as high as she can."
     duration: 5.0
     seed: 42
 
-  - anchor_prompt: "Close-up shot in a simple cartoon bedroom. A cartoon girl with big round green eyes, bright orange pigtails, yellow star t-shirt, blue shorts, and red sneakers kneels by the open green toy chest. Red bed with white pillow, blue nightstand with star-shaped lamp, window with yellow curtains, and small cactus on windowsill visible. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  - anchor_prompt: "Close-up shot. The girl kneels by open green toy chest, holding colorful toy above head triumphantly. Red bed, blue nightstand, yellow curtains visible. Same bedroom, same girl, same style."
     prompt: "The girl picks up a colorful toy from the green toy chest and holds it up triumphantly with both hands, her face beaming with delight."
     duration: 5.0
     seed: 42
 
-  - anchor_prompt: "Medium shot of a simple cartoon bedroom. A cartoon girl with big round green eyes, bright orange pigtails, yellow star t-shirt, blue shorts, and red sneakers stands in the room. Red bed with white pillow, blue nightstand with star-shaped lamp, window with yellow curtains, green toy chest, and small cactus on windowsill visible. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  - anchor_prompt: "Medium shot. The girl tiptoes sneakily through bedroom, looking left and right. Red bed, blue nightstand, yellow curtains, green toy chest visible. Same bedroom, same girl, same style."
     prompt: "The girl tiptoes around the room in an exaggerated sneaky manner, looking left and right playfully."
     duration: 5.0
     seed: 42
 
-  - anchor_prompt: "High angle shot looking down at a simple cartoon bedroom. A cartoon girl with big round green eyes, bright orange pigtails, yellow star t-shirt, blue shorts, and red sneakers sits cross-legged on the floor next to the red bed. Blue nightstand with star-shaped lamp, window with yellow curtains, green toy chest, and small cactus on windowsill visible. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  - anchor_prompt: "High angle shot. The girl sits cross-legged on floor next to red bed, looking up peacefully. Blue nightstand, yellow curtains, green toy chest visible. Same bedroom, same girl, same style."
     prompt: "The girl sits cross-legged on the floor next to the red bed, looking up with a peaceful, content expression."
     duration: 5.0
     seed: 42
 
-  - anchor_prompt: "Close-up shot in a simple cartoon bedroom. A cartoon girl with big round green eyes, bright orange pigtails, yellow star t-shirt, blue shorts, and red sneakers stands at the window. Yellow curtains frame the window, small cactus on windowsill beside her. Red bed with white pillow, blue nightstand with star-shaped lamp, and green toy chest visible. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  - anchor_prompt: "Close-up shot. The girl presses face against window glass, hands cupped around eyes. Yellow curtains frame window, cactus on windowsill. Red bed, blue nightstand visible. Same bedroom, same girl, same style."
     prompt: "The girl presses her face against the window glass with her hands cupped around her eyes, looking outside with intense curiosity."
     duration: 5.0
     seed: 42
 
   # === PHASE: return (5s, 1 chunk) ===
-  - anchor_prompt: "Wide shot from the hallway looking into a simple cartoon living room with purple couch, round wooden coffee table, tall bookshelf with colorful books, round yellow rug, and window with green curtains. A cartoon girl with big round green eyes, bright orange pigtails, yellow star t-shirt, blue shorts, and red sneakers stands in the doorway on the right. A cartoon robot with boxy silver body, round blue glowing eyes, stubby arms, antenna, and small wheels sits on the purple couch. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  - anchor_prompt: "Return to living room. Wide shot from hallway. The girl stands in doorway on right. The robot sits on purple couch, looking toward her. Purple couch, coffee table, bookshelf, yellow rug, green curtains. Same characters, same style."
     prompt: "The girl walks back into the living room through the doorway, smiling big. Her orange pigtails sway as she enters. The robot's blue eyes light up as it sees her."
     duration: 5.0
     seed: 42
 
   # === PHASE: reunion (10s, 2 chunks) ===
-  - anchor_prompt: "Wide shot of a simple cartoon living room with purple couch, round wooden coffee table, tall bookshelf with colorful books, round yellow rug, and window with green curtains. A cartoon girl with big round green eyes, bright orange pigtails, yellow star t-shirt, blue shorts, and red sneakers sits on the left side of the purple couch. A cartoon robot with boxy silver body, round blue glowing eyes, stubby arms, antenna, and small wheels sits on the right side. The round wooden coffee table is between them. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  - anchor_prompt: "Wide shot of living room. The girl sits on left side of purple couch. The robot sits on right side. Coffee table between them. Bookshelf, yellow rug, green curtains visible. Same characters, same style."
     prompt: "The girl waves her hands excitedly as she talks, her orange pigtails bouncing. The robot gestures happily with stubby arms, wheels rocking."
     duration: 5.0
     seed: 42
 
-  - anchor_prompt: "Medium shot of a simple cartoon living room. A cartoon robot with boxy silver body, round blue glowing eyes, stubby arms raised, and antenna sits on the right side of the purple couch. A cartoon girl with big round green eyes, bright orange pigtails, yellow star t-shirt, blue shorts, and red sneakers sits on the left. Bookshelf with colorful books in background, green curtains frame the window. 3D animation, Pixar style, bright colors, soft lighting, clean simple shapes."
+  - anchor_prompt: "Medium shot. The robot on right side of purple couch with arms raised excitedly. The girl on left side clapping hands. Bookshelf in background, green curtains frame window. Same characters, same style."
     prompt: "The robot bounces excitedly on the couch with stubby arms raised. The girl claps her hands together and grins. They are happy to be together again."
     duration: 5.0
     seed: 42
@@ -134,6 +140,8 @@ height: 480
 
 # Generate fresh anchor for each scene (better character consistency)
 fresh_anchors: true
+# Use FLUX Kontext for character-consistent anchors (chains previous anchor as reference)
+use_kontext: true
 
 # HunyuanVideo + FramePack settings
 framepack_model: lllyasviel/FramePack_F1_I2V_HY_20250503
@@ -144,5 +152,5 @@ framepack_sampling: vanilla
 guidance_scale: 6.0
 num_inference_steps: 30
 
-# Anchor image generation
+# Anchor image generation (used for Scene 1 only)
 image_model: black-forest-labs/FLUX.1-dev

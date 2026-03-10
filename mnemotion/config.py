@@ -41,6 +41,8 @@ class Config(BaseModel):
     fresh_anchors: bool = False
     # Style LoRA for consistent visual style
     style_lora: Path | None = None
+    # Use FLUX Kontext for character-consistent anchors (requires fresh_anchors=True)
+    use_kontext: bool = True
 
     @classmethod
     def from_yaml(cls, path: Path) -> "Config":
