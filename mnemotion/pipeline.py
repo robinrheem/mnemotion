@@ -99,10 +99,8 @@ class VideoPipeline:
         self.framepack_pipe.enable_model_cpu_offload()
         self.framepack_pipe.vae.enable_tiling()
         self.framepack_pipe.vae.enable_slicing()
-        self.framepack_pipe.transformer = torch.compile(
-            self.framepack_pipe.transformer, mode="default"
-        )
-        print("Loaded HunyuanVideo + FramePack with CPU offload + torch.compile")
+        # torch.compile disabled - FramePack has dynamic indexing that inductor can't handle
+        print("Loaded HunyuanVideo + FramePack with CPU offload")
 
     @torch.inference_mode()
     def generate_clip(
