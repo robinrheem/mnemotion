@@ -100,7 +100,7 @@ class VideoPipeline:
         self.framepack_pipe.vae.enable_tiling()
         self.framepack_pipe.vae.enable_slicing()
         self.framepack_pipe.transformer = torch.compile(
-            self.framepack_pipe.transformer, mode="reduce-overhead"
+            self.framepack_pipe.transformer, mode="default"
         )
         print("Loaded HunyuanVideo + FramePack with CPU offload + torch.compile")
 
