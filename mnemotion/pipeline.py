@@ -98,7 +98,11 @@ class VideoPipeline:
         )
         self.framepack_pipe.enable_model_cpu_offload()
         self.framepack_pipe.vae.enable_tiling()
-        print("Loaded HunyuanVideo + FramePack with CPU offload")
+        self.framepack_pipe.vae.enable_slicing()
+        self.framepack_pipe.transformer = torch.compile(
+            self.framepack_pipe.transformer, mode="reduce-overhead"
+        )
+        print("Loaded HunyuanVideo + FramePack with CPU offload + torch.compile")
 
     @torch.inference_mode()
     def generate_clip(
