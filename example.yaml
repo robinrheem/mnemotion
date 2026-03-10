@@ -129,8 +129,8 @@ scenes:
 
 output: consistency_benchmark.mp4
 fps: 24
-width: 1280
-height: 720
+width: 848
+height: 480
 
 # Generate fresh anchor for each scene (better character consistency)
 fresh_anchors: true
