@@ -1,78 +1,64 @@
-"""Video generation pipeline using image-to-video chaining."""
+"""Video generation pipeline using HunyuanVideo + FramePack."""
 
 from pathlib import Path
 
 import imageio
 import numpy as np
 import torch
-from diffusers import AutoPipelineForText2Image, WanImageToVideoPipeline
+from diffusers import (
+    AutoPipelineForText2Image,
+    HunyuanVideoFramepackPipeline,
+    HunyuanVideoFramepackTransformer3DModel,
+)
 from PIL import Image
+from transformers import SiglipImageProcessor, SiglipVisionModel
 
 from .config import Config, Scene
 
 
 class VideoPipeline:
-    """Generates videos by chaining anchor images through I2V models."""
+    """Generates videos using HunyuanVideo + FramePack (anti-drift)."""
 
     def __init__(self, config: Config, device: str = "cuda"):
-        """Initialize pipeline with image and video generation models."""
+        """Initialize pipeline with configuration."""
         self.config = config
         self.device = device
         self.is_flux = "flux" in config.image_model.lower()
-        self.reference_image: Image.Image | None = None
-        self.ip_adapter_loaded = False
-        # Validate IP-Adapter compatibility
-        if (
-            config.reference_image or config.use_first_frame_as_reference
-        ) and self.is_flux:
-            raise ValueError(
-                "IP-Adapter requires SDXL. Set image_model to "
-                "'stabilityai/stable-diffusion-xl-base-1.0' when using reference_image."
-            )
-        # Flux uses bfloat16, others use float16
+        # Pipeline instances (lazy loaded)
+        self.image_pipe = None
+        self.framepack_pipe = None
+
+    def _load_image_pipe(self) -> None:
+        """Load image generation pipeline to GPU."""
+        if self.image_pipe is not None:
+            return
+        print("Loading image model...")
         img_dtype = torch.bfloat16 if self.is_flux else torch.float16
         self.image_pipe = AutoPipelineForText2Image.from_pretrained(
-            config.image_model,
+            self.config.image_model,
             torch_dtype=img_dtype,
-        ).to(device)
-        # Load IP-Adapter for character consistency (if reference provided upfront)
-        if config.reference_image:
-            self._load_ip_adapter()
-            self.reference_image = Image.open(config.reference_image).convert("RGB")
-            print(
-                f"Loaded IP-Adapter with reference image, scale={config.ip_adapter_scale}"
-            )
-        self.video_pipe = WanImageToVideoPipeline.from_pretrained(
-            config.video_model,
-            torch_dtype=torch.float16,
-        ).to(device)
-        self.video_pipe.vae.enable_slicing()
-        self.video_pipe.transformer = torch.compile(
-            self.video_pipe.transformer,
-            mode="reduce-overhead",
-            fullgraph=True,
-        )
-        print("Compiled video transformer (first run will be slow)")
+        ).to(self.device)
+        if self.config.style_lora is not None:
+            print(f"Loading style LoRA: {self.config.style_lora}")
+            self.image_pipe.load_lora_weights(str(self.config.style_lora))
 
-    def _load_ip_adapter(self) -> None:
-        """Load IP-Adapter weights into the image pipeline."""
-        if self.ip_adapter_loaded:
-            return
-        self.image_pipe.load_ip_adapter(
-            "h94/IP-Adapter",
-            subfolder="sdxl_models",
-            weight_name="ip-adapter_sdxl.bin",
-        )
-        self.image_pipe.set_ip_adapter_scale(self.config.ip_adapter_scale)
-        self.ip_adapter_loaded = True
+    def _unload_image_pipe(self) -> None:
+        """Unload image pipeline to free GPU memory."""
+        if self.image_pipe is not None:
+            del self.image_pipe
+            self.image_pipe = None
+            torch.cuda.empty_cache()
+            print("Unloaded image model")
 
     def generate_anchor(self, scene: Scene) -> Image.Image:
         """Generate or load the anchor image for a scene."""
         if scene.anchor_image:
             return Image.open(scene.anchor_image).convert("RGB")
-
+        self._load_image_pipe()
+        # Use anchor_prompt for visual details, fall back to motion prompt
+        prompt = scene.anchor_prompt or scene.prompt
         kwargs = {
-            "prompt": scene.prompt,
+            "prompt": prompt,
             "width": self.config.width,
             "height": self.config.height,
             "generator": (
@@ -81,23 +67,68 @@ class VideoPipeline:
                 else None
             ),
         }
-        # Flux doesn't support negative_prompt
         if not self.is_flux:
             kwargs["negative_prompt"] = scene.negative_prompt
-        # IP-Adapter for character consistency
-        if self.reference_image is not None:
-            kwargs["ip_adapter_image"] = self.reference_image
         return self.image_pipe(**kwargs).images[0]
 
+    def _load_framepack_pipe(self) -> None:
+        """Load HunyuanVideo + FramePack pipeline to GPU."""
+        if self.framepack_pipe is not None:
+            return
+        print("Loading HunyuanVideo + FramePack model...")
+        transformer = HunyuanVideoFramepackTransformer3DModel.from_pretrained(
+            self.config.framepack_model,
+            torch_dtype=torch.bfloat16,
+        )
+        feature_extractor = SiglipImageProcessor.from_pretrained(
+            "lllyasviel/flux_redux_bfl",
+            subfolder="feature_extractor",
+        )
+        image_encoder = SiglipVisionModel.from_pretrained(
+            "lllyasviel/flux_redux_bfl",
+            subfolder="image_encoder",
+            torch_dtype=torch.float16,
+        )
+        self.framepack_pipe = HunyuanVideoFramepackPipeline.from_pretrained(
+            self.config.hunyuan_model,
+            transformer=transformer,
+            feature_extractor=feature_extractor,
+            image_encoder=image_encoder,
+            torch_dtype=torch.float16,
+        )
+        self.framepack_pipe.enable_model_cpu_offload()
+        self.framepack_pipe.vae.enable_tiling()
+        print("Loaded HunyuanVideo + FramePack with CPU offload")
+
     @torch.inference_mode()
-    def generate_clip(self, anchor: Image.Image, scene: Scene) -> list[Image.Image]:
-        """Generate a video clip from an anchor image using I2V."""
+    def generate_clip(
+        self,
+        anchor: Image.Image,
+        scene: Scene,
+        last_image: Image.Image | None = None,
+    ) -> list[Image.Image]:
+        """Generate a video clip using HunyuanVideo + FramePack."""
+        self._load_framepack_pipe()
         num_frames = int(scene.duration * self.config.fps)
-        result = self.video_pipe(
+        num_frames = max(17, num_frames)  # minimum 17 frames for FramePack
+        # Load last_image if provided in scene config
+        if last_image is None and scene.last_image:
+            last_image = Image.open(scene.last_image).convert("RGB")
+        result = self.framepack_pipe(
             image=anchor.resize((self.config.width, self.config.height)),
+            last_image=(
+                last_image.resize((self.config.width, self.config.height))
+                if last_image
+                else None
+            ),
             prompt=scene.prompt,
             negative_prompt=scene.negative_prompt,
+            height=self.config.height,
+            width=self.config.width,
             num_frames=num_frames,
+            num_inference_steps=self.config.num_inference_steps,
+            guidance_scale=self.config.guidance_scale,
+            sampling_type=self.config.framepack_sampling,
             generator=(
                 torch.Generator(self.device).manual_seed(scene.seed)
                 if scene.seed
@@ -115,10 +146,9 @@ class VideoPipeline:
         return frame.astype(np.uint8)
 
     def run(self) -> Path:
-        """Run the full pipeline: generate all scenes and stream to video."""
-        anchor: Image.Image | None = None
+        """Run the full FramePack pipeline."""
         frame_count = 0
-        # Stream frames directly to disk (low memory)
+        prev_last_frame = None
         writer = imageio.get_writer(
             self.config.output,
             fps=self.config.fps,
@@ -127,28 +157,30 @@ class VideoPipeline:
         )
         try:
             for i, scene in enumerate(self.config.scenes):
-                print(
-                    f"[{i + 1}/{len(self.config.scenes)}] Generating: {scene.prompt[:50]}..."
-                )
-                if anchor is None:
+                print(f"[{i + 1}/{len(self.config.scenes)}] {scene.prompt[:50]}...")
+                # Get anchor image
+                if scene.anchor_image:
+                    anchor = Image.open(scene.anchor_image).convert("RGB")
+                elif self.config.fresh_anchors or i == 0:
+                    # Generate fresh anchor for this scene
                     anchor = self.generate_anchor(scene)
-                    # Use first frame as IP-Adapter reference for subsequent scenes
-                    if (
-                        self.config.use_first_frame_as_reference
-                        and not self.ip_adapter_loaded
-                    ):
-                        self._load_ip_adapter()
-                        self.reference_image = anchor
-                        print(
-                            f"Using first frame as IP-Adapter reference, scale={self.config.ip_adapter_scale}"
-                        )
-                frames = self.generate_clip(anchor, scene)
+                    if not self.config.fresh_anchors:
+                        self._unload_image_pipe()  # Free memory if only used for first scene
+                else:
+                    # Chain from previous scene's last frame
+                    anchor = prev_last_frame
+                # Load last_image if provided
+                last_image = None
+                if scene.last_image:
+                    last_image = Image.open(scene.last_image).convert("RGB")
+                frames = self.generate_clip(anchor, scene, last_image)
                 for frame in frames:
-                    frame_uint8 = self._to_uint8(frame)
-                    writer.append_data(frame_uint8)
+                    writer.append_data(self._to_uint8(frame))
                     frame_count += 1
-                # Last frame becomes next anchor
-                anchor = Image.fromarray(self._to_uint8(frames[-1]))
+                prev_last_frame = Image.fromarray(self._to_uint8(frames[-1]))
+            # Unload image pipe at end if we used fresh_anchors
+            if self.config.fresh_anchors:
+                self._unload_image_pipe()
         finally:
             writer.close()
         print(f"Wrote {frame_count} frames to {self.config.output}")
