@@ -227,7 +227,7 @@ class VideoPipeline:
         """Run the full FramePack pipeline."""
         frame_count = 0
         prev_last_frame = None
-        prev_anchor = None  # For Kontext chaining
+        character_reference = None  # Scene 1's anchor, used for all Kontext generations
         writer = imageio.get_writer(
             self.config.output,
             fps=self.config.fps,
@@ -243,9 +243,13 @@ class VideoPipeline:
                 elif self.config.fresh_anchors or i == 0:
                     # Generate anchor for this scene
                     # First scene: no reference (text-to-image)
-                    # Subsequent scenes: use previous anchor as reference (Kontext)
-                    anchor = self.generate_anchor(scene, reference=prev_anchor)
-                    prev_anchor = anchor  # Chain for next scene
+                    # Subsequent scenes: use Scene 1's anchor as reference (Kontext)
+                    # This prevents drift/degradation from chaining
+                    anchor = self.generate_anchor(scene, reference=character_reference)
+                    if character_reference is None:
+                        character_reference = (
+                            anchor  # Save Scene 1 as reference for all
+                        )
                     if not self.config.fresh_anchors:
                         self._unload_image_pipe()  # Free memory if only used for first scene
                 else:
