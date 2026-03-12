@@ -28,15 +28,15 @@ uv tool install vbench
 ### Run Evaluation
 
 ```bash
-# Evaluate default consistency dimensions
+# Evaluate a single dimension
 vbench evaluate \
     --videos_path output.mp4 \
     --dimension subject_consistency \
     --mode custom_input \
     --output_path ./vbench_results
 
-# Evaluate multiple dimensions
-for dim in subject_consistency background_consistency temporal_flickering motion_smoothness; do
+# Evaluate all 16 dimensions
+for dim in subject_consistency background_consistency temporal_flickering motion_smoothness dynamic_degree aesthetic_quality imaging_quality object_class multiple_objects human_action color spatial_relationship scene temporal_style appearance_style overall_consistency; do
     vbench evaluate --videos_path output.mp4 --dimension $dim --mode custom_input --output_path ./vbench_results
 done
 ```
