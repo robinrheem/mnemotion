@@ -169,7 +169,8 @@ class VideoPipeline:
             image_encoder=image_encoder,
             torch_dtype=torch.float16,
         )
-        self.framepack_pipe.enable_model_cpu_offload()
+        gpu_id = int(self.device.split(":")[-1]) if ":" in self.device else 0
+        self.framepack_pipe.enable_model_cpu_offload(gpu_id=gpu_id)
         self.framepack_pipe.vae.enable_tiling()
         self.framepack_pipe.vae.enable_slicing()
         # torch.compile disabled - FramePack has dynamic indexing that inductor can't handle
